@@ -1,0 +1,25 @@
+Lisandro López Villatoro 24 Jul 26
+
+*Micro-tarea:* Crear una función utilitaria que valide la estructura de un correo electrónico y verifique dominios permitidos.
+
+*Pilar 1 — Herramienta:* Cursor (o Claude Code / Copilot Chat).
+  ¿Por qué? Permite un flujo ágil inline/chat con diff visual directo en el IDE para funciones pequeñas.
+
+*Pilar 2 — Contexto:* 
+  - Aportado: Lenguaje TypeScript, framework de tests (Vitest), lista de dominios permitidos (`@empresa.com`).
+  - Omitido: El resto del código del repositorio, APIs backend y librerías externas complejas para evitar ruido y "Context Rot".
+
+*Pilar 3 — Prompt:* 
+  Escribe una función en TypeScript `isValidEmail(email: string): boolean`.
+  - Criterios de éxito: Pasa los tests unitarios en `isValidEmail.test.ts`.
+  - Restricciones: No agregues dependencias externas (usa regex nativo). Si hay ambigüedad con subdominios, pregúntame antes de codificar.
+  - Formato: Devuelve solo la función y su archivo de tests correspondiente.
+
+  
+
+  _________________________________
+
+  Registra 3 observaciones
+
+  el concepto completo SDD, Sync, Delta, no los conocía, aún que se me hace mucha documentación y tiempo,
+  parece que llega de manera más precisa al resultado esperado de forma autónoma y lo bueno que incluye pruebas

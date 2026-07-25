@@ -1,0 +1,58 @@
+# ============================================================
+# .gitignore — entregables del curso AI4Devs
+# Sesion 2 17jun26
+# ============================================================
+# Idea: subir SOLO el contenido de la entrega (juegos .html,
+# carpeta openspec/, consigna). Ignorar tooling local, settings
+# del IDE/agente, y archivos temporales.
+# ------------------------------------------------------------
+
+
+# --- Tooling / scripts de subida (locales, no entregables) ---
+Submit-Entregable.ps1
+# (si reusas el script entre sesiones, dejalo solo local)
+
+
+# --- Claude Code (config local del agente) ---
+.claude/
+
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+desktop.ini
+*.lnk
+
+
+# --- Microsoft Office / Word (locks y temporales) ---
+~$*.docx
+~$*.doc
+~$*.xlsx
+~$*.pptx
+*.tmp
+
+
+# --- Editores de codigo ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+
+# --- Dependencias / build (por si se agregan despues) ---
+node_modules/
+dist/
+build/
+*.log
+
+
+# ============================================================
+# NOTAS:
+# - Los entregables (.html, .md, .txt, y la carpeta openspec/)
+#   NO estan ignorados -> se suben con git add -A.
+# - Si en una sesion futura queres SI subier un archivo que esta
+#   ignorado aca, forzalo con: git add -f <archivo>
+# - Si decis que SI queres subir el script, comenta o borra la
+#   linea "Submit-Entregable.ps1".
+# ============================================================

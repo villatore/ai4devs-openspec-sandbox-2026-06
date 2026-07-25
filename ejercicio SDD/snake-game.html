@@ -1,0 +1,626 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="color-scheme" content="light dark">
+  <title>Snake Game</title>
+  <style>
+    /* ============================================================
+       SECTION: Reset + design tokens
+       ============================================================ */
+    *, *::before, *::after { box-sizing: border-box; }
+    :root {
+      --bg: #0f172a;
+      --bg-elev: #1e293b;
+      --fg: #e2e8f0;
+      --fg-muted: #94a3b8;
+      --accent: #34d399;
+      --accent-press: #10b981;
+      --food: #f43f5e;
+      --good: #4ade80;
+      --warn: #fbbf24;
+      --bad: #f87171;
+      --radius: 14px;
+      --tap: 48px;
+      --shadow: 0 6px 24px rgba(0,0,0,.35);
+      color-scheme: light dark;
+    }
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #f8fafc;
+        --bg-elev: #ffffff;
+        --fg: #0f172a;
+        --fg-muted: #475569;
+        --shadow: 0 4px 18px rgba(15,23,42,.08);
+      }
+    }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+
+    /* ============================================================
+       SECTION: Layout
+       ============================================================ */
+    .app {
+      max-width: 480px;
+      margin: 0 auto;
+      padding: 16px;
+      display: grid;
+      grid-template-rows: auto auto auto auto auto auto;
+      gap: 14px;
+      min-height: 100dvh;
+    }
+    header.bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    header.bar h1 { margin: 0; font-size: 1.25rem; }
+
+    .icon-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: var(--tap); height: var(--tap); border-radius: 999px;
+      background: var(--bg-elev); color: var(--fg);
+      border: 1px solid color-mix(in srgb, var(--fg) 12%, transparent);
+      cursor: pointer; box-shadow: var(--shadow);
+    }
+    .icon-btn:active { transform: scale(.97); }
+    .icon-btn svg { width: 22px; height: 22px; }
+
+    /* ============================================================
+       SECTION: Instructions panel
+       ============================================================ */
+    .panel {
+      background: var(--bg-elev); border-radius: var(--radius);
+      padding: 16px; box-shadow: var(--shadow);
+    }
+    .panel[hidden] { display: none; }
+    .panel header {
+      display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;
+    }
+    .panel h2 { margin: 0; font-size: 1rem; }
+    .panel ol { margin: 0; padding-left: 1.2em; color: var(--fg-muted); line-height: 1.45; }
+    .panel .close-btn {
+      background: transparent; border: 0; color: var(--fg-muted);
+      cursor: pointer; font-size: 1.5rem; line-height: 1; padding: 4px 8px;
+    }
+
+    /* ============================================================
+       SECTION: Score / best display
+       ============================================================ */
+    .scoreboard {
+      display: flex; justify-content: space-between; align-items: baseline;
+      gap: 12px; padding: 10px 14px;
+      background: var(--bg-elev); border-radius: var(--radius); box-shadow: var(--shadow);
+    }
+    .scoreboard .label { color: var(--fg-muted); font-size: .85rem; text-transform: uppercase; letter-spacing: .05em; }
+    .scoreboard .val { font-variant-numeric: tabular-nums; font-size: 1.1rem; font-weight: 700; }
+    .scoreboard .group { text-align: right; }
+
+    /* ============================================================
+       SECTION: Canvas board
+       ============================================================ */
+    .board-wrap {
+      display: flex; justify-content: center;
+    }
+    canvas#board {
+      background: var(--bg-elev);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      width: 100%; max-width: 420px;
+      aspect-ratio: 1 / 1;        /* square, responsive */
+      height: auto; display: block;
+      touch-action: none;
+    }
+
+    /* ============================================================
+       SECTION: On-screen D-pad
+       ============================================================ */
+    .dpad {
+      display: grid;
+      grid-template-columns: repeat(3, var(--tap));
+      grid-template-rows: repeat(3, var(--tap));
+      justify-content: center;
+      gap: 8px;
+    }
+    .dpad button {
+      width: var(--tap); height: var(--tap);
+      border-radius: 12px; border: 0; cursor: pointer;
+      background: var(--bg-elev); color: var(--fg);
+      font-size: 1.4rem; line-height: 1;
+      box-shadow: var(--shadow);
+      border: 1px solid color-mix(in srgb, var(--fg) 12%, transparent);
+      touch-action: manipulation; user-select: none;
+    }
+    .dpad button:active { transform: scale(.96); }
+    .dpad .up    { grid-column: 2; grid-row: 1; }
+    .dpad .left  { grid-column: 1; grid-row: 2; }
+    .dpad .right { grid-column: 3; grid-row: 2; }
+    .dpad .down  { grid-column: 2; grid-row: 3; }
+
+    /* ============================================================
+       SECTION: Action buttons + status
+       ============================================================ */
+    .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .btn {
+      min-height: var(--tap); padding: 0 18px; border-radius: var(--radius);
+      border: 0; font: inherit; font-weight: 600; cursor: pointer;
+      transition: background 120ms ease, transform 80ms ease, opacity 120ms ease;
+    }
+    .btn:active { transform: scale(.98); }
+    .btn[disabled] { opacity: .45; cursor: not-allowed; }
+    .btn-primary { background: var(--accent); color: #042f1e; }
+    .btn-primary:not([disabled]):hover { background: var(--accent-press); }
+    .btn-secondary { background: var(--bg-elev); color: var(--fg); border: 1px solid color-mix(in srgb, var(--fg) 12%, transparent); }
+
+    .status {
+      min-height: 1.4em; text-align: center; font-size: .9rem; color: var(--fg-muted);
+    }
+    .status.warn { color: var(--warn); }
+    .status.good { color: var(--good); }
+    .status.bad  { color: var(--bad); }
+
+    @media (prefers-reduced-motion: reduce) {
+      .food-pulse { animation: none !important; }
+      .btn:active, .icon-btn:active, .dpad button:active { transform: none; }
+    }
+    @keyframes foodPulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.08); } }
+  </style>
+</head>
+<body>
+  <main class="app" aria-live="polite">
+    <header class="bar">
+      <h1>Snake Game</h1>
+      <button id="help-btn" class="icon-btn" type="button" aria-label="Show instructions" aria-expanded="false" aria-controls="instructions">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="10"></circle>
+          <path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 2-3 4"></path>
+          <circle cx="12" cy="17" r=".8" fill="currentColor"></circle>
+        </svg>
+      </button>
+    </header>
+
+    <section id="instructions" class="panel" role="region" aria-labelledby="instructions-title" hidden>
+      <header>
+        <h2 id="instructions-title">How to play</h2>
+        <button id="close-help-btn" class="close-btn" type="button" aria-label="Hide instructions">&times;</button>
+      </header>
+      <ol>
+        <li>Tap <strong>Start</strong> (or press a direction) to begin.</li>
+        <li>Steer with the arrow keys / WASD or the on-screen D-pad.</li>
+        <li>Eat the red food to grow and score; don't hit the walls or yourself.</li>
+        <li>Fill the whole board to win. Your <strong>Best</strong> score is saved on this device.</li>
+      </ol>
+    </section>
+
+    <section class="scoreboard" aria-label="Score">
+      <div class="group"><div class="label">Score</div><div id="score" class="val">0</div></div>
+      <div class="group"><div class="label">Best</div><div id="best" class="val">0</div></div>
+    </section>
+
+    <section class="board-wrap" aria-label="Game board">
+      <canvas id="board" width="420" height="420" role="img" aria-label="Snake board"></canvas>
+    </section>
+
+    <section class="dpad" aria-label="Directional controls">
+      <button id="dpad-up"    class="up"    type="button" aria-label="Up">&#9650;</button>
+      <button id="dpad-left"  class="left"  type="button" aria-label="Left">&#9664;</button>
+      <button id="dpad-right" class="right" type="button" aria-label="Right">&#9654;</button>
+      <button id="dpad-down"  class="down"  type="button" aria-label="Down">&#9660;</button>
+    </section>
+
+    <section class="actions" aria-label="Game controls">
+      <button id="start-btn" class="btn btn-primary" type="button">Start</button>
+      <button id="reset-btn" class="btn btn-secondary" type="button" disabled>Reset</button>
+    </section>
+
+    <div id="status" class="status" role="status" aria-live="polite"></div>
+  </main>
+
+  <script>
+  (function () {
+    'use strict';
+
+    // ============================================================
+    // SECTION: Config
+    // ============================================================
+    var GRID = 20;                 // 20x20 board
+    var BASE_TICK_MS = 140;        // starting speed
+    var MIN_TICK_MS = 70;          // fastest
+    var SPEED_STEP_MS = 3;         // speed up per food eaten
+    var HIGH_SCORE_KEY = 'snakeBest';
+
+    // ============================================================
+    // SECTION: DOM refs
+    // ============================================================
+    var $canvas = document.getElementById('board');
+    var $score = document.getElementById('score');
+    var $best = document.getElementById('best');
+    var $start = document.getElementById('start-btn');
+    var $reset = document.getElementById('reset-btn');
+    var $status = document.getElementById('status');
+    var $helpBtn = document.getElementById('help-btn');
+    var $closeHelpBtn = document.getElementById('close-help-btn');
+    var $instructions = document.getElementById('instructions');
+    var ctx = $canvas.getContext('2d');
+
+    // ============================================================
+    // SECTION: State
+    // ============================================================
+    var state = 'idle';            // 'idle' | 'playing' | 'ended'
+    var snake = [];                // [{x,y}, ...] head first
+    var dir = { x: 1, y: 0 };      // current heading
+    var pendingDir = null;         // one-slot input queue
+    var food = { x: 0, y: 0 };
+    var score = 0;
+    var best = readBest();
+    var rafId = 0;
+    var acc = 0;                   // accumulator (ms)
+    var lastFrame = 0;             // last rAF timestamp
+    var cellSize = 1;              // recomputed on resize
+
+    renderStatic();
+
+    // ============================================================
+    // SECTION: High-DPI canvas setup
+    // ============================================================
+    function resizeCanvas() {
+      var cssSize = $canvas.clientWidth;
+      if (cssSize <= 0) cssSize = 420;
+      var dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 3));
+      $canvas.width = Math.round(cssSize * dpr);
+      $canvas.height = Math.round(cssSize * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      cellSize = cssSize / GRID;
+      render();
+    }
+    window.addEventListener('resize', resizeCanvas);
+
+    // ============================================================
+    // SECTION: State machine
+    // ============================================================
+    function setState(next) {
+      if (state === next) return;
+      state = next;
+      renderControls();
+    }
+    function renderControls() {
+      if (state === 'idle') {
+        $start.disabled = false; $start.textContent = 'Start';
+        $reset.disabled = true;
+      } else if (state === 'playing') {
+        $start.disabled = true; $start.textContent = 'Playing…';
+        $reset.disabled = false;
+      } else if (state === 'ended') {
+        $start.disabled = false; $start.textContent = 'Play again';
+        $reset.disabled = false;
+      }
+    }
+    function renderStatic() {
+      $score.textContent = String(score);
+      $best.textContent = String(best);
+    }
+    function setStatus(msg, kind) {
+      $status.textContent = msg || '';
+      $status.className = 'status' + (kind ? ' ' + kind : '');
+    }
+
+    // ============================================================
+    // SECTION: Persistence (safe localStorage)
+    // ============================================================
+    function readBest() {
+      try {
+        var raw = localStorage.getItem(HIGH_SCORE_KEY);
+        var n = parseInt(raw, 10);
+        return Number.isFinite(n) && n >= 0 ? n : 0;
+      } catch (_) { return 0; }
+    }
+    function writeBest(n) {
+      try { localStorage.setItem(HIGH_SCORE_KEY, String(n)); } catch (_) { /* private mode / disabled */ }
+    }
+
+    // ============================================================
+    // SECTION: Board setup
+    // ============================================================
+    function initialSnake() {
+      // 3 segments, moving right, centered vertically
+      var mid = Math.floor(GRID / 2);
+      return [
+        { x: 2, y: mid },
+        { x: 1, y: mid },
+        { x: 0, y: mid }
+      ];
+    }
+    function isOnSnake(x, y) {
+      for (var i = 0; i < snake.length; i++) {
+        if (snake[i].x === x && snake[i].y === y) return true;
+      }
+      return false;
+    }
+    function spawnFood() {
+      var free = [];
+      for (var y = 0; y < GRID; y++) {
+        for (var x = 0; x < GRID; x++) {
+          if (!isOnSnake(x, y)) free.push({ x: x, y: y });
+        }
+      }
+      if (free.length === 0) return false; // board full -> win
+      food = free[Math.floor(Math.random() * free.length)];
+      return true;
+    }
+
+    // ============================================================
+    // SECTION: Rendering
+    // ============================================================
+    function render() {
+      var size = $canvas.clientWidth || 420;
+      // Background
+      ctx.fillStyle = getCss('--bg-elev');
+      ctx.fillRect(0, 0, size, size);
+      // Subtle grid lines
+      ctx.strokeStyle = colorMixAlpha('--fg', 0.06);
+      ctx.lineWidth = 1;
+      for (var i = 1; i < GRID; i++) {
+        var p = i * cellSize;
+        ctx.beginPath(); ctx.moveTo(p, 0); ctx.lineTo(p, size); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, p); ctx.lineTo(size, p); ctx.stroke();
+      }
+      // Food
+      drawCell(food.x, food.y, getCss('--food'), cellSize * 0.18);
+      // Snake (tail -> head so head is on top)
+      var headColor = getCss('--accent-press');
+      var bodyColor = getCss('--accent');
+      for (var s = snake.length - 1; s >= 0; s--) {
+        drawCell(snake[s].x, snake[s].y, s === 0 ? headColor : bodyColor, cellSize * 0.12);
+      }
+    }
+    function drawCell(x, y, color, radius) {
+      var px = x * cellSize, py = y * cellSize;
+      var r = Math.min(radius, cellSize / 2);
+      ctx.fillStyle = color;
+      roundRect(px + 1, py + 1, cellSize - 2, cellSize - 2, r);
+      ctx.fill();
+    }
+    function roundRect(x, y, w, h, r) {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r);
+      ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r);
+      ctx.arcTo(x, y, x + w, y, r);
+      ctx.closePath();
+    }
+    function getCss(varName) {
+      return getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+    }
+    function colorMixAlpha(varName, alpha) {
+      var hex = getCss(varName);
+      var c = hex.replace('#', '');
+      if (c.length === 3) c = c[0]+c[0]+c[1]+c[1]+c[2]+c[2];
+      var r = parseInt(c.substr(0,2),16), g = parseInt(c.substr(2,2),16), b = parseInt(c.substr(4,2),16);
+      return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+    }
+
+    // ============================================================
+    // SECTION: Game loop (fixed timestep + accumulator)
+    // ============================================================
+    function tickMs() {
+      return Math.max(MIN_TICK_MS, BASE_TICK_MS - score * SPEED_STEP_MS);
+    }
+    function startRound() {
+      snake = initialSnake();
+      dir = { x: 1, y: 0 };
+      pendingDir = null;
+      score = 0;
+      renderStatic();
+      spawnFood();
+      acc = 0;
+      lastFrame = 0;
+      setStatus('', '');
+      setState('playing');
+      cancelAnimationFrame(rafId);
+      lastFrame = performance.now();
+      rafId = requestAnimationFrame(loop);
+      render();
+    }
+    function loop(now) {
+      if (state !== 'playing') return;
+      if (!lastFrame) lastFrame = now;
+      var dt = now - lastFrame;
+      lastFrame = now;
+      acc += dt;
+      var step = tickMs();
+      var moved = false;
+      while (acc >= step) {
+        acc -= step;
+        if (!stepSnake()) { // collision/win -> ended
+          return;
+        }
+        moved = true;
+        // speed may have changed (score++) -> recompute
+        step = tickMs();
+      }
+      if (moved) render();
+      rafId = requestAnimationFrame(loop);
+    }
+
+    // ============================================================
+    // SECTION: Snake step (movement, growth, collision)
+    // ============================================================
+    function stepSnake() {
+      // Apply queued direction (validated for reversal in the input layer)
+      if (pendingDir) { dir = pendingDir; pendingDir = null; }
+      var head = snake[0];
+      var nx = head.x + dir.x;
+      var ny = head.y + dir.y;
+
+      // Wall collision
+      if (nx < 0 || ny < 0 || nx >= GRID || ny >= GRID) {
+        endRound(false);
+        return false;
+      }
+      // Determine if eating (head lands on food)
+      var eating = (nx === food.x && ny === food.y);
+
+      // Self collision: check against body, EXCLUDING the tail when not eating
+      // (the tail will move away this tick, so it's safe to move into it).
+      var bodyLimit = snake.length - (eating ? 0 : 1);
+      for (var i = 0; i < bodyLimit; i++) {
+        if (snake[i].x === nx && snake[i].y === ny) {
+          endRound(false);
+          return false;
+        }
+      }
+
+      var newHead = { x: nx, y: ny };
+      snake.unshift(newHead);
+      if (eating) {
+        score += 1;
+        renderStatic();
+        if (!spawnFood()) { endRound(true); return false; } // win
+      } else {
+        snake.pop(); // not growing: drop tail
+      }
+      return true;
+    }
+
+    function endRound(won) {
+      cancelAnimationFrame(rafId);
+      rafId = 0;
+      render(); // final board
+      if (won) {
+        setStatus('You win! Board cleared.', 'good');
+      } else {
+        setStatus('Game over. Final: ' + score, 'bad');
+      }
+      if (score > best) {
+        best = score;
+        writeBest(best);
+        $best.textContent = String(best);
+        if (!won) setStatus('Game over. New best!', 'good');
+      }
+      setState('ended');
+    }
+
+    function reset() {
+      cancelAnimationFrame(rafId);
+      rafId = 0;
+      snake = initialSnake();
+      dir = { x: 1, y: 0 };
+      pendingDir = null;
+      score = 0;
+      spawnFood();
+      renderStatic();
+      setStatus('', '');
+      setState('idle');
+      render();
+    }
+
+    // ============================================================
+    // SECTION: Input (keyboard + D-pad), queued, anti-reversal
+    // ============================================================
+    var DIRS = {
+      up:    { x: 0, y: -1 },
+      down:  { x: 0, y: 1 },
+      left:  { x: -1, y: 0 },
+      right: { x: 1, y: 0 }
+    };
+    function queueDir(name) {
+      var nd = DIRS[name];
+      if (!nd) return;
+      // Quarter-turns are allowed; allow 180° only when the snake is length 1
+      // (no neck to bite). Otherwise reject exact opposite of current heading.
+      if (snake.length > 1 && nd.x === -dir.x && nd.y === -dir.y) return;
+      pendingDir = nd;
+    }
+    function keyToDir(key) {
+      switch (key) {
+        case 'ArrowUp': case 'w': case 'W': return 'up';
+        case 'ArrowDown': case 's': case 'S': return 'down';
+        case 'ArrowLeft': case 'a': case 'A': return 'left';
+        case 'ArrowRight': case 'd': case 'D': return 'right';
+        default: return null;
+      }
+    }
+    window.addEventListener('keydown', function (e) {
+      var name = keyToDir(e.key);
+      if (!name) return;
+      e.preventDefault();
+      if (state === 'idle' || state === 'ended') { startRound(); }
+      if (state === 'playing') queueDir(name);
+    });
+    function bindDpad(id, name) {
+      var el = document.getElementById(id);
+      el.addEventListener('click', function () {
+        if (state === 'idle' || state === 'ended') { startRound(); }
+        if (state === 'playing') queueDir(name);
+      });
+    }
+    bindDpad('dpad-up', 'up');
+    bindDpad('dpad-down', 'down');
+    bindDpad('dpad-left', 'left');
+    bindDpad('dpad-right', 'right');
+
+    // ============================================================
+    // SECTION: Control wiring
+    // ============================================================
+    $start.addEventListener('click', function () {
+      if (state === 'idle' || state === 'ended') startRound();
+    });
+    $reset.addEventListener('click', reset);
+
+    // ============================================================
+    // SECTION: Instructions toggle
+    // ============================================================
+    function showInstructions() {
+      $instructions.hidden = false;
+      $helpBtn.setAttribute('aria-expanded', 'true');
+      $helpBtn.setAttribute('aria-label', 'Hide instructions');
+    }
+    function hideInstructions() {
+      $instructions.hidden = true;
+      $helpBtn.setAttribute('aria-expanded', 'false');
+      $helpBtn.setAttribute('aria-label', 'Show instructions');
+    }
+    $helpBtn.addEventListener('click', function () {
+      if ($instructions.hidden) showInstructions(); else hideInstructions();
+    });
+    $closeHelpBtn.addEventListener('click', hideInstructions);
+
+    // ============================================================
+    // SECTION: Page Lifecycle (pause on hidden tab)
+    // ============================================================
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) {
+        // Drop accumulated time so the loop doesn't fast-forward on return
+        lastFrame = 0;
+        acc = 0;
+        if (state === 'playing') setStatus('Paused (switch back to resume).', 'warn');
+      } else {
+        if (state === 'playing') {
+          lastFrame = 0;
+          setStatus('', '');
+          rafId = requestAnimationFrame(loop);
+        }
+      }
+    });
+
+    // ============================================================
+    // SECTION: Init
+    // ============================================================
+    snake = initialSnake();
+    spawnFood();
+    resizeCanvas();   // sets cellSize + first render
+  })();
+  </script>
+</body>
+</html>

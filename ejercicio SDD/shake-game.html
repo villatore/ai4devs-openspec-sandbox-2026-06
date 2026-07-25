@@ -1,0 +1,527 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="color-scheme" content="light dark">
+  <title>Shake Game</title>
+  <style>
+    /* ============================================================
+       SECTION: Reset + design tokens
+       ============================================================ */
+    *, *::before, *::after { box-sizing: border-box; }
+    :root {
+      --bg: #0f172a;
+      --bg-elev: #1e293b;
+      --fg: #e2e8f0;
+      --fg-muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-press: #0ea5e9;
+      --good: #4ade80;
+      --warn: #fbbf24;
+      --bad: #f87171;
+      --radius: 14px;
+      --tap: 48px;
+      --shadow: 0 6px 24px rgba(0,0,0,.35);
+      color-scheme: light dark;
+    }
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #f8fafc;
+        --bg-elev: #ffffff;
+        --fg: #0f172a;
+        --fg-muted: #475569;
+        --shadow: 0 4px 18px rgba(15,23,42,.08);
+      }
+    }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+
+    /* ============================================================
+       SECTION: Layout
+       ============================================================ */
+    .app {
+      max-width: 480px;
+      margin: 0 auto;
+      padding: 16px;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto auto;
+      gap: 16px;
+      min-height: 100dvh;
+    }
+
+    header.bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    header.bar h1 {
+      margin: 0;
+      font-size: 1.25rem;
+      letter-spacing: .01em;
+    }
+
+    .icon-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: var(--tap);
+      height: var(--tap);
+      border-radius: 999px;
+      background: var(--bg-elev);
+      color: var(--fg);
+      border: 1px solid color-mix(in srgb, var(--fg) 12%, transparent);
+      cursor: pointer;
+      box-shadow: var(--shadow);
+    }
+    .icon-btn:active { transform: scale(.97); }
+    .icon-btn svg { width: 22px; height: 22px; }
+
+    /* ============================================================
+       SECTION: Instructions panel
+       ============================================================ */
+    .panel {
+      background: var(--bg-elev);
+      border-radius: var(--radius);
+      padding: 16px;
+      box-shadow: var(--shadow);
+    }
+    .panel[hidden] { display: none; }
+    .panel header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .panel h2 {
+      margin: 0;
+      font-size: 1rem;
+    }
+    .panel ol {
+      margin: 0;
+      padding-left: 1.2em;
+      color: var(--fg-muted);
+      line-height: 1.45;
+    }
+    .panel .close-btn {
+      background: transparent;
+      border: 0;
+      color: var(--fg-muted);
+      cursor: pointer;
+      font-size: 1.5rem;
+      line-height: 1;
+      padding: 4px 8px;
+    }
+
+    /* ============================================================
+       SECTION: Score / timer display
+       ============================================================ */
+    .stage {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 28px 16px;
+      background: var(--bg-elev);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      text-align: center;
+    }
+    .score {
+      font-variant-numeric: tabular-nums;
+      font-size: clamp(3rem, 12vw, 5rem);
+      font-weight: 700;
+      line-height: 1;
+      transition: transform 120ms ease, color 120ms ease;
+    }
+    .score.pulse { transform: scale(1.15); color: var(--accent); }
+    .timer {
+      font-size: 1.1rem;
+      color: var(--fg-muted);
+      font-variant-numeric: tabular-nums;
+    }
+    .best {
+      font-size: .9rem;
+      color: var(--fg-muted);
+    }
+
+    /* ============================================================
+       SECTION: Action buttons
+       ============================================================ */
+    .actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .btn {
+      min-height: var(--tap);
+      padding: 0 18px;
+      border-radius: var(--radius);
+      border: 0;
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 120ms ease, transform 80ms ease, opacity 120ms ease;
+    }
+    .btn:active { transform: scale(.98); }
+    .btn[disabled] { opacity: .45; cursor: not-allowed; }
+
+    .btn-primary { background: var(--accent); color: #04212e; }
+    .btn-primary:not([disabled]):hover { background: var(--accent-press); }
+
+    .btn-secondary { background: var(--bg-elev); color: var(--fg); border: 1px solid color-mix(in srgb, var(--fg) 12%, transparent); }
+    .btn-shake {
+      grid-column: 1 / -1;
+      background: linear-gradient(180deg, var(--accent) 0%, var(--accent-press) 100%);
+      color: #04212e;
+      font-size: 1.15rem;
+      padding: 14px 18px;
+    }
+
+    /* ============================================================
+       SECTION: Status line
+       ============================================================ */
+    .status {
+      min-height: 1.4em;
+      text-align: center;
+      font-size: .9rem;
+      color: var(--fg-muted);
+    }
+    .status.warn { color: var(--warn); }
+    .status.good { color: var(--good); }
+
+    @media (prefers-reduced-motion: reduce) {
+      .score, .score.pulse { transition: none; transform: none; }
+      .btn:active { transform: none; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app" aria-live="polite">
+    <header class="bar">
+      <h1>Shake Game</h1>
+      <button id="help-btn" class="icon-btn" type="button" aria-label="Show instructions" aria-expanded="false" aria-controls="instructions">
+        <!-- inline SVG: question mark -->
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="10"></circle>
+          <path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 2-3 4"></path>
+          <circle cx="12" cy="17" r=".8" fill="currentColor"></circle>
+        </svg>
+      </button>
+    </header>
+
+    <section id="instructions" class="panel" role="region" aria-labelledby="instructions-title" hidden>
+      <header>
+        <h2 id="instructions-title">How to play</h2>
+        <button id="close-help-btn" class="close-btn" type="button" aria-label="Hide instructions">&times;</button>
+      </header>
+      <ol>
+        <li>Tap <strong>Start</strong> to begin a 30-second round.</li>
+        <li>Shake your phone — or tap the big <strong>Shake</strong> button — to score.</li>
+        <li>Each registered shake adds 1 point. The <strong>Best</strong> score is saved on this device.</li>
+      </ol>
+    </section>
+
+    <section class="stage" aria-label="Game status">
+      <div id="score" class="score" aria-label="Current score">0</div>
+      <div id="timer" class="timer" aria-label="Time remaining">Press Start</div>
+      <div id="best" class="best" aria-label="Best score">Best: 0</div>
+    </section>
+
+    <section class="actions" aria-label="Game controls">
+      <button id="start-btn" class="btn btn-primary" type="button">Start</button>
+      <button id="reset-btn" class="btn btn-secondary" type="button" disabled>Reset</button>
+      <button id="shake-btn" class="btn btn-shake" type="button" aria-label="Register a shake">Shake</button>
+    </section>
+
+    <div id="status" class="status" role="status" aria-live="polite"></div>
+  </main>
+
+  <script>
+  (function () {
+    'use strict';
+
+    // ============================================================
+    // SECTION: Config
+    // ============================================================
+    var ROUND_DURATION_MS = 30000;     // 30-second rounds
+    var SHAKE_THRESHOLD = 15;          // m/s^2 above gravity (tune per device)
+    var SHAKE_WINDOW_MS = 200;         // two consecutive samples in this window
+    var SHAKE_COOLDOWN_MS = 250;       // minimum gap between registered shakes
+    var HIGH_SCORE_KEY = 'shakeHigh';
+
+    // ============================================================
+    // SECTION: DOM refs
+    // ============================================================
+    var $score = document.getElementById('score');
+    var $timer = document.getElementById('timer');
+    var $best = document.getElementById('best');
+    var $start = document.getElementById('start-btn');
+    var $reset = document.getElementById('reset-btn');
+    var $shake = document.getElementById('shake-btn');
+    var $status = document.getElementById('status');
+    var $helpBtn = document.getElementById('help-btn');
+    var $closeHelpBtn = document.getElementById('close-help-btn');
+    var $instructions = document.getElementById('instructions');
+
+    // ============================================================
+    // SECTION: State
+    // ============================================================
+    var state = 'idle'; // 'idle' | 'playing' | 'ended'
+    var score = 0;
+    var best = readBest();
+    var roundStartedAt = 0;
+    var rafId = 0;
+    var lastShakeAt = 0;
+    var lastAccelSample = null;     // { mag, t }
+    var lastAboveThresholdAt = 0;   // ms timestamp of last qualifying sample
+    var motionStatusLogged = false;
+
+    renderStatic();
+
+    // ============================================================
+    // SECTION: setState
+    // ============================================================
+    function setState(next) {
+      if (state === next) return;
+      state = next;
+      renderControls();
+    }
+
+    function renderControls() {
+      if (state === 'idle') {
+        $start.disabled = false;
+        $start.textContent = 'Start';
+        $reset.disabled = true;
+        $timer.textContent = 'Press Start';
+      } else if (state === 'playing') {
+        $start.disabled = true;
+        $start.textContent = 'Playing…';
+        $reset.disabled = false;
+      } else if (state === 'ended') {
+        $start.disabled = false;
+        $start.textContent = 'Play again';
+        $reset.disabled = false;
+      }
+    }
+
+    function renderStatic() {
+      $score.textContent = String(score);
+      $best.textContent = 'Best: ' + best;
+    }
+
+    function setStatus(msg, kind) {
+      $status.textContent = msg || '';
+      $status.className = 'status' + (kind ? ' ' + kind : '');
+    }
+
+    // ============================================================
+    // SECTION: Persistence (safe localStorage)
+    // ============================================================
+    function readBest() {
+      try {
+        var raw = localStorage.getItem(HIGH_SCORE_KEY);
+        var n = parseInt(raw, 10);
+        return Number.isFinite(n) && n >= 0 ? n : 0;
+      } catch (_) {
+        return 0;
+      }
+    }
+    function writeBest(n) {
+      try { localStorage.setItem(HIGH_SCORE_KEY, String(n)); } catch (_) { /* private mode / disabled */ }
+    }
+
+    // ============================================================
+    // SECTION: Game loop (rAF)
+    // ============================================================
+    function startRound() {
+      score = 0;
+      roundStartedAt = performance.now();
+      $score.textContent = '0';
+      setStatus('', '');
+      setState('playing');
+      lastShakeAt = 0;
+      cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(tick);
+    }
+
+    function tick(now) {
+      if (state !== 'playing') return;
+      var elapsed = now - roundStartedAt;
+      var remaining = Math.max(0, ROUND_DURATION_MS - elapsed);
+      $timer.textContent = (remaining / 1000).toFixed(1) + 's';
+
+      if (remaining <= 0) {
+        endRound();
+        return;
+      }
+      rafId = requestAnimationFrame(tick);
+    }
+
+    function endRound() {
+      cancelAnimationFrame(rafId);
+      rafId = 0;
+      $timer.textContent = 'Time! Final: ' + score;
+      if (score > best) {
+        best = score;
+        writeBest(best);
+        $best.textContent = 'Best: ' + best;
+        setStatus('New best!', 'good');
+      } else {
+        setStatus('Round over.', '');
+      }
+      setState('ended');
+    }
+
+    function reset() {
+      cancelAnimationFrame(rafId);
+      rafId = 0;
+      score = 0;
+      $score.textContent = '0';
+      $timer.textContent = 'Press Start';
+      setStatus('', '');
+      setState('idle');
+    }
+
+    // ============================================================
+    // SECTION: Shake handling (gated by state)
+    // ============================================================
+    function registerShake() {
+      if (state !== 'playing') return;
+      var now = performance.now();
+      if (now - lastShakeAt < SHAKE_COOLDOWN_MS) return; // debounce double-fires
+      lastShakeAt = now;
+      score += 1;
+      $score.textContent = String(score);
+      $score.classList.remove('pulse');
+      // restart the pulse animation
+      // eslint-disable-next-line no-unused-expressions
+      void $score.offsetWidth;
+      $score.classList.add('pulse');
+    }
+
+    // On-screen Shake button: always works, exactly one shake per activation
+    $shake.addEventListener('click', function () { registerShake(); });
+
+    // ============================================================
+    // SECTION: Motion detection (devicemotion)
+    // ============================================================
+    function computeMagnitude(accel) {
+      if (!accel) return 0;
+      // Prefer accel (linear accel, no gravity). Fall back to accelIncludingGravity.
+      var x = accel.x || 0, y = accel.y || 0, z = accel.z || 0;
+      return Math.sqrt(x * x + y * y + z * z);
+    }
+
+    function onMotion(e) {
+      var now = performance.now();
+      var accel = e.acceleration || e.accelerationIncludingGravity;
+      if (!accel) return;
+      var mag = computeMagnitude(accel);
+
+      // Track two-consecutive-samples-in-200ms rule.
+      if (mag > SHAKE_THRESHOLD) {
+        if (lastAccelSample &&
+            (now - lastAccelSample.t) <= SHAKE_WINDOW_MS &&
+            lastAccelSample.mag > SHAKE_THRESHOLD) {
+          registerShake();
+          lastAccelSample = null; // require a fresh pair next time
+          return;
+        }
+        lastAccelSample = { mag: mag, t: now };
+      } else {
+        // Reset once we fall below threshold for long enough
+        if (lastAccelSample && (now - lastAccelSample.t) > SHAKE_WINDOW_MS) {
+          lastAccelSample = null;
+        }
+      }
+    }
+
+    function enableMotion() {
+      if (!('DeviceMotionEvent' in window)) {
+        if (!motionStatusLogged) {
+          setStatus('Motion sensors unavailable — use the Shake button.', 'warn');
+          motionStatusLogged = true;
+        }
+        return false;
+      }
+      var DME = window.DeviceMotionEvent;
+      // iOS 13+ requires explicit permission inside a user gesture.
+      if (typeof DME.requestPermission === 'function') {
+        DME.requestPermission()
+          .then(function (resp) {
+            if (resp === 'granted') {
+              window.addEventListener('devicemotion', onMotion, { passive: true });
+              setStatus('Motion enabled.', 'good');
+            } else {
+              if (!motionStatusLogged) {
+                setStatus('Motion denied — use the Shake button.', 'warn');
+                motionStatusLogged = true;
+              }
+            }
+          })
+          .catch(function () {
+            if (!motionStatusLogged) {
+              setStatus('Motion permission error — use the Shake button.', 'warn');
+              motionStatusLogged = true;
+            }
+          });
+      } else {
+        window.addEventListener('devicemotion', onMotion, { passive: true });
+      }
+      return true;
+    }
+
+    // ============================================================
+    // SECTION: Control wiring
+    // ============================================================
+    $start.addEventListener('click', function () {
+      // Try to enable motion on first Start (which is a user gesture).
+      if (state === 'idle' || state === 'ended') {
+        enableMotion();
+        startRound();
+      }
+    });
+    $reset.addEventListener('click', reset);
+
+    // ============================================================
+    // SECTION: Instructions toggle
+    // ============================================================
+    function showInstructions() {
+      $instructions.hidden = false;
+      $helpBtn.setAttribute('aria-expanded', 'true');
+      $helpBtn.setAttribute('aria-label', 'Hide instructions');
+    }
+    function hideInstructions() {
+      $instructions.hidden = true;
+      $helpBtn.setAttribute('aria-expanded', 'false');
+      $helpBtn.setAttribute('aria-label', 'Show instructions');
+    }
+    $helpBtn.addEventListener('click', function () {
+      if ($instructions.hidden) showInstructions(); else hideInstructions();
+    });
+    $closeHelpBtn.addEventListener('click', hideInstructions);
+
+    // ============================================================
+    // SECTION: Page Lifecycle
+    // ============================================================
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden && state === 'playing') {
+        // Pause fairness: end the round if the user tabs out.
+        endRound();
+      }
+    });
+  })();
+  </script>
+</body>
+</html>
